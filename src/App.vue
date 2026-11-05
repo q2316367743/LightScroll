@@ -1,16 +1,15 @@
 <script setup>
 import { ref, shallowRef, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { getCurrentWindow } from '@tauri-apps/api/window'
-import { open as openDialog } from '@tauri-apps/plugin-dialog'
-import { readFile } from '@tauri-apps/plugin-fs'
+import { getCurrentWindow, hasInternals, listen } from '@dashou/api'
 import { TextLayer } from 'pdfjs-dist'
 import {
   openPdf, openPdfBytes, parseRange, makeOverlayCanvas,
   watermarkLayer, watermarkRaster, extractPages, rotatePages, mergePdfs,
-  exportImages, compressPdf, encryptPdf, decryptPdf,
-  saveBytes, outputPath, fileSize, revealFile,
+  exportImages, compressPdf, encryptPdf, decryptPdf, saveBytes,
 } from './pdfops.js'
+import {
+  fileSize, imageBitmapOf, messageOf, outputPath, pickImage, pickPdfs, revealFile,
+} from './backend.js'
 import { ICONS } from './icons.js'
 import {
   buildPageRows, buildTextMap, findMatchesInText, nextZoomStep,
@@ -31,15 +30,18 @@ const NAV = [
 const tool = ref('read')
 const doc = shallowRef(null) // { path, name, size, bytes, pdf, pageCount, sizes:[{w,h}] }
 const errorMsg = ref('')
-const dragging = ref(false)
 const lastResult = ref(null) // { label, path, extra }
 const busy = reactive({ active: false, stage: '', done: 0, total: 0 })
 const pwPrompt = reactive({ show: false, path: '', name: '', value: '', wrong: false })
 
 // ---------- 打开文档 ----------
 async function pickAndOpen() {
-  const path = await openDialog({ multiple: false, title: '打开 PDF', filters: [{ name: 'PDF 文档', extensions: ['pdf'] }] })
-  if (typeof path === 'string') await loadDoc(path)
+  try {
+    const [file] = await pickPdfs({ title: '打开 PDF' })
+    if (file) await loadDoc(file.path)
+  } catch (error) {
+    errorMsg.value = messageOf(error)
+  }
 }
 
 async function loadDoc(path, password) {
@@ -919,7 +921,7 @@ function onViewerContextMenu(event) {
 async function toggleFullscreen(force) {
   const enter = force ?? !fullscreen.value
   try {
-    if ('__TAURI_INTERNALS__' in window) {
+    if (hasInternals()) {
       await getCurrentWindow().setFullscreen(enter)
     } else if (enter && !document.fullscreenElement) {
       await document.documentElement.requestFullscreen()
@@ -928,7 +930,7 @@ async function toggleFullscreen(force) {
     }
     fullscreen.value = enter
   } catch {
-    // WKWebView 不允许原生全屏时仍使用无边框阅读布局。
+    // 宿主 / 浏览器都不允许原生全屏时仍使用无边框阅读布局。
     fullscreen.value = enter
   }
 }
@@ -1217,12 +1219,15 @@ let wmImageBitmap = null
 const previewUrl = ref('')
 
 async function pickWmImage() {
-  const path = await openDialog({ multiple: false, title: '选择水印图片', filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] })
-  if (typeof path !== 'string') return
-  wm.imagePath = path
-  const bytes = await readFile(path)
-  wmImageBitmap = await createImageBitmap(new Blob([bytes]))
-  refreshPreview()
+  try {
+    const file = await pickImage()
+    if (!file) return
+    wm.imagePath = file.path
+    wmImageBitmap = await imageBitmapOf(file.path)
+    refreshPreview()
+  } catch (error) {
+    errorMsg.value = messageOf(error)
+  }
 }
 
 let previewTimer = null
@@ -1249,12 +1254,15 @@ watch(wm, refreshPreview)
 const mergeList = ref([])
 
 async function addMergeFiles() {
-  const paths = await openDialog({ multiple: true, title: '添加 PDF', filters: [{ name: 'PDF 文档', extensions: ['pdf'] }] })
-  if (!paths) return
-  for (const p of Array.isArray(paths) ? paths : [paths]) {
-    if (!mergeList.value.some((x) => x.path === p)) {
-      mergeList.value.push({ path: p, name: p.split(/[/\\]/).pop() })
+  try {
+    const files = await pickPdfs({ title: '添加 PDF', multiple: true })
+    for (const file of files) {
+      if (!mergeList.value.some((x) => x.path === file.path)) {
+        mergeList.value.push({ path: file.path, name: file.name })
+      }
     }
+  } catch (error) {
+    errorMsg.value = messageOf(error)
   }
 }
 
@@ -1404,10 +1412,10 @@ async function applyCompress() {
   })
 }
 
-// ---------- 拖拽与生命周期 ----------
-let unlistenDrop = null
+// ---------- 启动器附件与生命周期 ----------
+let unlistenCommand = null
 
-// 演示模式: ?demo=<tool> 加载内置示例文档, 供文档截图, 不依赖 Tauri
+// 演示模式: ?demo=<tool> 加载内置示例文档, 供文档截图, 不依赖宿主
 const DEMO = new URLSearchParams(location.search).get('demo')
 
 async function seedDemo(t) {
@@ -1416,7 +1424,7 @@ async function seedDemo(t) {
     pwPrompt.name = '董事会纪要-机密.pdf'
     return
   }
-  const res = await fetch('/demo.pdf')
+  const res = await fetch('./demo.pdf')
   const raw = new Uint8Array(await res.arrayBuffer())
   const { bytes, pdf } = await openPdfBytes(raw)
   const sizes = []
@@ -1456,6 +1464,25 @@ async function seedDemo(t) {
   document.title = 'DEMO_READY'
 }
 
+/** 启动器带来的附件：合并工具里追加，其它工具直接打开第一个 */
+function handleCommand(payload) {
+  const attachment = payload?.attachment
+  if (!attachment || attachment.kind !== 'files') return
+  const pdfs = attachment.files.filter(
+    (file) => file.isFile && file.path.toLowerCase().endsWith('.pdf')
+  )
+  if (pdfs.length === 0) return
+  if (tool.value === 'merge') {
+    for (const file of pdfs) {
+      if (!mergeList.value.some((x) => x.path === file.path)) {
+        mergeList.value.push({ path: file.path, name: file.name })
+      }
+    }
+    return
+  }
+  loadDoc(pdfs[0].path)
+}
+
 onMounted(async () => {
   window.addEventListener('resize', onResize)
   window.addEventListener('keydown', handleKeydown)
@@ -1464,32 +1491,13 @@ onMounted(async () => {
     seedDemo(DEMO)
     return
   }
-  unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {
-    const t = event.payload.type
-    if (t === 'drop') {
-      dragging.value = false
-      const pdfs = event.payload.paths.filter((p) => p.toLowerCase().endsWith('.pdf'))
-      if (!pdfs.length) return
-      if (tool.value === 'merge') {
-        for (const p of pdfs) {
-          if (!mergeList.value.some((x) => x.path === p)) {
-            mergeList.value.push({ path: p, name: p.split(/[/\\]/).pop() })
-          }
-        }
-      } else {
-        loadDoc(pdfs[0])
-      }
-    } else if (t === 'leave') {
-      dragging.value = false
-    } else {
-      dragging.value = true
-    }
-  })
+  // 窗口刚打开时宿主先把命令排队，登记监听后自动补发，首条命令不会丢
+  unlistenCommand = await listen('command', (event) => handleCommand(event.payload))
 })
 
 function onResize() {
   if (doc.value && zoomMode.value !== 'custom') invalidateRendering(80)
-  if ('__TAURI_INTERNALS__' in window) {
+  if (hasInternals()) {
     getCurrentWindow().isFullscreen().then((value) => {
       fullscreen.value = value
       if (!value && presentation.value) onFullscreenChange()
@@ -1515,7 +1523,7 @@ onBeforeUnmount(() => {
   clearTimeout(saveStateTimer)
   clearTimeout(searchTimer)
   clearTimeout(zoomTimer)
-  unlistenDrop?.()
+  unlistenCommand?.()
   observer?.disconnect()
   thumbObserver?.disconnect()
   readerThumbObserver?.disconnect()
@@ -1529,20 +1537,20 @@ const toolMeta = computed(() => NAV.find((n) => n.id === tool.value))
 // 未打开文档时, 各工具的空状态文案
 const emptyCopy = computed(() => {
   const map = {
-    read: '拖入 PDF 文件，或点击打开',
-    watermark: '拖入要加水印的 PDF，或点击打开',
-    pages: '拖入 PDF，开始管理页面',
-    export: '拖入 PDF，导出为图片',
-    compress: '拖入要压缩的 PDF',
-    protect: '拖入要加密的 PDF',
-    unlock: '拖入要解密的 PDF（需要知道它的密码）',
+    read: '选择一个 PDF 开始阅读',
+    watermark: '选择要加水印的 PDF',
+    pages: '选择 PDF，开始管理页面',
+    export: '选择 PDF，导出为图片',
+    compress: '选择要压缩的 PDF',
+    protect: '选择要加密的 PDF',
+    unlock: '选择要解密的 PDF（需要知道它的密码）',
   }
   return map[tool.value] || map.read
 })
 </script>
 
 <template>
-  <div class="app" :class="{ dragging, fullscreen, presentation, 'reader-inverted': inverted && tool === 'read' }">
+  <div class="app" :class="{ fullscreen, presentation, 'reader-inverted': inverted && tool === 'read' }">
     <!-- 侧栏 -->
     <aside class="sidebar">
       <div class="brand">
@@ -1609,7 +1617,7 @@ const emptyCopy = computed(() => {
         <div v-else-if="tool === 'merge'" class="merge-standalone">
           <div class="panel-head">
             <h2>合并 PDF</h2>
-            <p>把多个 PDF 按顺序合成一个文件，拖进窗口或点击添加</p>
+            <p>把多个 PDF 按顺序合成一个文件，点击「添加 PDF」逐个加入</p>
           </div>
           <div class="merge-list" v-if="mergeList.length">
             <div v-for="(m, i) in mergeList" :key="m.path" class="merge-item">
@@ -2071,11 +2079,6 @@ const emptyCopy = computed(() => {
       </template>
     </main>
 
-    <!-- 拖拽遮罩 -->
-    <div v-if="dragging" class="drag-overlay">
-      <div class="drag-overlay-text">松手，交给轻卷</div>
-    </div>
-
     <!-- 任务进度 -->
     <div v-if="busy.active" class="busy-mask">
       <div class="busy-box">
@@ -2270,8 +2273,7 @@ const emptyCopy = computed(() => {
   background: rgba(255, 255, 255, 0.55);
   transition: border-color 0.2s, background 0.2s;
 }
-.dropzone:hover,
-.app.dragging .dropzone {
+.dropzone:hover {
   border-color: var(--primary);
   background: var(--primary-lighter);
 }
@@ -3063,29 +3065,7 @@ const emptyCopy = computed(() => {
   display: block;
 }
 
-/* 遮罩 */
-.drag-overlay {
-  position: fixed;
-  inset: 10px;
-  background: rgba(22, 100, 255, 0.07);
-  backdrop-filter: blur(2px);
-  border: 2px dashed var(--primary);
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 50;
-}
-.drag-overlay-text {
-  font-size: 19px;
-  font-weight: 600;
-  color: var(--primary);
-  background: #fff;
-  padding: 14px 34px;
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(22, 100, 255, 0.28);
-}
+/* 任务进度 */
 
 .busy-mask {
   position: fixed;

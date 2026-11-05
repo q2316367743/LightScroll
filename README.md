@@ -5,10 +5,10 @@
 **PDF 工具箱 · 阅读 · 水印 · 加密 —— 全部本地完成**
 
 流畅阅读、双模式水印（图层 / **防删除栅格**）、AES 加密解密、合并拆分旋转、转图片、压缩。
-没有服务器、没有上传、没有会员——你的文档永远不离开你的电脑，安装包只有 **4MB**。
+没有服务器、没有上传、没有会员——你的文档永远不离开你的电脑，安装包不到 **1MB**。
 
 [![平台](https://img.shields.io/badge/平台-macOS%20%7C%20Windows%20%7C%20Linux-2E8BFF)](../../releases)
-[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app/)
+[![Tauri](https://img.shields.io/badge/搭手-插件-2E8BFF)](https://da-shou.cn)
 [![Vue](https://img.shields.io/badge/Vue-3-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/yzfly/lightscroll?color=2E8BFF&label=下载)](../../releases)
@@ -63,19 +63,23 @@
 
 通用能力：输出**永不覆盖**原文件 · 页码范围支持 `1-3,5` 语法（含中文逗号）· 扫描件旋转页水印方向自动修正。
 
-## 下载使用
+## 安装使用
 
-前往 [Releases](../../releases) 下载对应平台安装包（macOS `.dmg` / Windows `.exe` / Linux `.AppImage` `.deb`）。macOS 版已签名并通过 Apple 公证。
+轻卷是一个 **搭手（da-shou）插件**。拿到 `com.dashou.lightscroll-<version>.dsp` 后，在搭手「插件管理 → 安装插件」里选择它，或直接双击。
+
+装好后在搜索条输入「轻卷 / pdf / 加水印」即可打开；也可以先在搜索条里选中若干 PDF，用「用轻卷打开这些 PDF」把它们直接交给轻卷。
 
 ## 从源码构建
 
-依赖：[Rust](https://rustup.rs/) stable、Node.js 18+
+依赖：Node.js 18+、pnpm
 
 ```bash
 git clone https://github.com/yzfly/lightscroll.git && cd lightscroll
-npm install && npm install --prefix frontend
-npm run dev     # 开发调试
-npm run build   # 构建安装包
+pnpm install
+pnpm dev            # 前端预览；加 ?demo=read 可在浏览器里看内置示例文档
+pnpm typecheck      # 后台脚本类型检查
+pnpm plugin:dev     # 生成并 watch 后台脚本；搭手开发者工具添加 src-dashou 后「开发 / 打开」
+pnpm plugin:build   # 产出 src-dashou/dashou-dist/com.dashou.lightscroll-<version>.dsp
 ```
 
 没有任何外置二进制依赖——PDF 渲染用 [pdf.js](https://mozilla.github.io/pdf.js/)（Firefox 的引擎），重组与加密用 [@cantoo/pdf-lib](https://github.com/cantoo-scribe/pdf-lib)，全部跑在 WebView 里。
@@ -83,11 +87,15 @@ npm run build   # 构建安装包
 ## 技术架构
 
 ```
-frontend/src/pdfops.js   PDF 操作核心 (渲染/水印/页面操作/加解密)
-frontend/src/App.vue     阅读器 + 工具面板
-src-tauri/               Tauri 外壳, 仅 3 个 Rust 命令 (输出路径/文件大小/定位文件)
+src/                     界面：阅读器 + 工具面板
+src/pdfops.js            PDF 操作核心 (渲染/水印/页面操作/加解密)
+src/backend.js           窗口侧适配层 (文件选择 / 字节读写 / 输出命名)
+src-dashou/index.ts      后台脚本：所有文件系统操作都在这里
+src-dashou/plugin.json   插件清单 (窗口 / 命令 / 权限)
 docs/                    README 素材, 截图 demo 模式 (?demo=<tool>)
 ```
+
+窗口是沙箱页面，读不了本地文件；文件选择、字节读写、输出命名、在文件夹中显示全部由后台脚本完成，界面只拿字节和路径。
 
 文字水印用 canvas 以系统字体（苹方/雅黑）渲染成贴图——中文零乱码，且不用往应用里塞 10MB 字体文件。
 

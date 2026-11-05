@@ -1,16 +1,30 @@
 {
   "name": "lightscroll",
-  "version": "1.1.0",
-  "description": "轻卷 LightScroll - 本地 PDF 工具箱。阅读、水印(图层/防删除)、加密解密、合并拆分、转图片、压缩。",
   "private": true,
-  "scripts": {
-    "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
-  },
+  "version": "1.1.0",
+  "type": "module",
+  "description": "轻卷 LightScroll · 本地 PDF 工具箱（搭手插件）",
   "author": "云中江树",
   "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test src/reader.test.mjs",
+    "typecheck": "tsc -b tsconfig.dashou.json",
+    "plugin:dev": "dashou-plugin dev",
+    "plugin:build": "dashou-plugin build"
+  },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.4"
+    "@cantoo/pdf-lib": "^2.7.1",
+    "@dashou/api": "link:../../app/da-shou-plugin-ext/packages/api",
+    "@dashou/cli": "link:../../app/da-shou-plugin-ext/packages/cli",
+    "@dashou/core": "link:../../app/da-shou-plugin-ext/packages/core",
+    "@types/node": "^22.19.17",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "pdfjs-dist": "^4.10.38",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.3",
+    "vue": "^3.5.13"
   }
 }

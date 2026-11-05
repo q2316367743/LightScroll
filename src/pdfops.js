@@ -2,27 +2,14 @@
 import * as pdfjs from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from '@cantoo/pdf-lib'
-import { readFile, writeFile } from '@tauri-apps/plugin-fs'
-import { invoke } from '@tauri-apps/api/core'
+import { fileSize, outputPath, readBytes, writeBytes } from './backend.js'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
-
-export function outputPath(input, suffix, ext = 'pdf') {
-  return invoke('output_path', { input, suffix, ext })
-}
-
-export function fileSize(path) {
-  return invoke('file_size', { path })
-}
-
-export function revealFile(path) {
-  invoke('reveal', { path })
-}
 
 // 打开 PDF: 返回 { bytes, pdf } — bytes 供 pdf-lib 重组, pdf 供渲染
 // 加密文档传入 password; 密码错误/缺失时 pdf.js 抛 PasswordException
 export async function openPdf(path, password) {
-  const bytes = await readFile(path)
+  const bytes = await readBytes(path)
   // pdf.js 会接管传入的 buffer, 复制一份保留给 pdf-lib
   const copy = new Uint8Array(bytes)
   const pdf = await pdfjs.getDocument({ data: bytes, password, cMapUrl: undefined }).promise
@@ -257,7 +244,7 @@ export async function mergePdfs(paths, onProgress) {
   const out = await PDFDocument.create()
   let done = 0
   for (const path of paths) {
-    const bytes = await readFile(path)
+    const bytes = await readBytes(path)
     let src
     try {
       src = await PDFDocument.load(bytes)
@@ -296,7 +283,7 @@ export async function exportImages(pdf, range, dpi, format, quality, docPath, on
     const bytes = format === 'png' ? await canvasToPngBytes(cv) : await canvasToJpgBytes(cv, quality)
     // 每张图各自走防冲突命名, 重复导出不会覆盖之前的成果
     const path = await outputPath(docPath, `_p${String(i + 1).padStart(3, '0')}`, format)
-    await writeFile(path, bytes)
+    await writeBytes(path, bytes)
     outs.push(path)
     onProgress?.(++done)
   }
@@ -320,6 +307,6 @@ export async function compressPdf(pdf, dpi, quality, onProgress) {
 }
 
 export async function saveBytes(path, bytes) {
-  await writeFile(path, bytes)
+  await writeBytes(path, bytes)
   return fileSize(path)
 }
