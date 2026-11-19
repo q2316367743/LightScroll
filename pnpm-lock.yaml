@@ -12,14 +12,14 @@ importers:
         specifier: ^2.7.1
         version: 2.11.1(html-entities@2.6.0)
       '@dashou/api':
-        specifier: link:../../app/da-shou-plugin-ext/packages/api
-        version: link:../../app/da-shou-plugin-ext/packages/api
+        specifier: ^1.0.0
+        version: 1.0.0
       '@dashou/cli':
-        specifier: link:../../app/da-shou-plugin-ext/packages/cli
-        version: link:../../app/da-shou-plugin-ext/packages/cli
+        specifier: ^1.0.0
+        version: 1.0.0
       '@dashou/core':
-        specifier: link:../../app/da-shou-plugin-ext/packages/core
-        version: link:../../app/da-shou-plugin-ext/packages/core
+        specifier: ^1.0.1
+        version: 1.0.1
       '@types/node':
         specifier: ^22.19.17
         version: 22.20.5
@@ -62,6 +62,19 @@ packages:
     resolution: {integrity: sha512-lYuRJFfXgoP8WVE8HYSeoLfDcnSXmjMLmdZS7YvmYHngbcZfiqDOruHrZBqjYizkrNa4ad1yW4WCrPYyb26T3Q==}
     peerDependencies:
       html-entities: '>=2.3.2'
+
+  '@dashou/api@1.0.0':
+    resolution: {integrity: sha512-Fsj6D7qMMn/0NJiHGiOxr17gkcxVFtNbZccZGJBntN36oOoZiw7zPJH2AmW5liWtEVv/N1gRusqZf31noT3KWw==, tarball: https://onedev-esion.iepose.cn/da-shou/da-shou-ext/~npm/@dashou%2Fapi/-/1.0.0/@dashou%2Fapi-1.0.0.tgz}
+
+  '@dashou/cli@1.0.0':
+    resolution: {integrity: sha512-YRd3CqHqn3K8JvoaDkPKbMwXZnoFbELhrqC6YYK7lCM6mlU83o92M2cbD0cYUd3wmvfVJJRXTLlGoDBJx4Rgyw==, tarball: https://onedev-esion.iepose.cn/da-shou/da-shou-ext/~npm/@dashou%2Fcli/-/1.0.0/@dashou%2Fcli-1.0.0.tgz}
+    hasBin: true
+
+  '@dashou/core@1.0.1':
+    resolution: {integrity: sha512-mjwLK/sZXeXiLy5SJZrF+50mRhd38YpQehadMn3BjIPmHrupT6bfpb4FbCceoV9f8BnkyFPq7kDLtnSGGJMLsQ==, tarball: https://onedev-esion.iepose.cn/da-shou/da-shou-ext/~npm/@dashou%2Fcore/-/1.0.1/@dashou%2Fcore-1.0.1.tgz}
+
+  '@dashou/schema@1.0.0':
+    resolution: {integrity: sha512-FMqmOB3ghvvIBoXq2FFXQDGrdqnu3uQLcs6T2UF+C0RQqgrS90lknmlmdPmyFgklB8s+sxG7BMpRLbsSzcPlVw==, tarball: https://onedev-esion.iepose.cn/da-shou/da-shou-ext/~npm/@dashou%2Fschema/-/1.0.0/@dashou%2Fschema-1.0.0.tgz}
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -487,6 +500,10 @@ packages:
   '@vue/shared@3.5.44':
     resolution: {integrity: sha512-H82XLH0DjmSOdbEwO15x3QTo1f5PWEtv237eLpYKc0mqLu+B8hnq16lFWmuBmNurkeiG3wr+oM1FhOll/YVFRg==}
 
+  adm-zip@0.6.1:
+    resolution: {integrity: sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==}
+    engines: {node: '>=14.0'}
+
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
@@ -624,6 +641,9 @@ packages:
       typescript:
         optional: true
 
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
 snapshots:
 
   '@babel/helper-string-parser@7.29.11': {}
@@ -646,6 +666,24 @@ snapshots:
       html-entities: 2.6.0
       node-html-better-parser: 1.5.9
       tslib: 2.9.1
+
+  '@dashou/api@1.0.0':
+    dependencies:
+      '@dashou/schema': 1.0.0
+
+  '@dashou/cli@1.0.0':
+    dependencies:
+      '@dashou/schema': 1.0.0
+      adm-zip: 0.6.1
+      esbuild: 0.25.12
+
+  '@dashou/core@1.0.1':
+    dependencies:
+      '@dashou/schema': 1.0.0
+
+  '@dashou/schema@1.0.0':
+    dependencies:
+      zod: 4.6.7
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true
@@ -921,6 +959,8 @@ snapshots:
 
   '@vue/shared@3.5.44': {}
 
+  adm-zip@0.6.1: {}
+
   csstype@3.2.3: {}
 
   culori@4.0.2: {}
@@ -1060,3 +1100,5 @@ snapshots:
       '@vue/shared': 3.5.44
     optionalDependencies:
       typescript: 5.9.3
+
+  zod@4.6.7: {}
